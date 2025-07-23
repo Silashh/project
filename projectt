@@ -1,0 +1,409 @@
+// ---------------------- ENUMS ----------------------
+public enum ApplicationState
+{
+    Pending,
+    Approved,
+    Rejected,
+    InReview,
+    Cancelled
+}
+
+public enum BootcampState
+{
+    Preparing,
+    OpenForApplication,
+    InProgress,
+    Finished,
+    Cancelled
+}
+
+// ---------------------- ENTITIES ----------------------
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public DateTime DateOfBirth { get; set; }
+    public string NationalityIdentity { get; set; }
+    public string Email { get; set; }
+    public byte[] PasswordHash { get; set; }
+    public byte[] PasswordSalt { get; set; }
+}
+
+public class Applicant : User
+{
+    public string About { get; set; }
+    public ICollection<Application> Applications { get; set; }
+    public ICollection<Blacklist> Blacklists { get; set; }
+}
+
+public class Instructor : User
+{
+    public string CompanyName { get; set; }
+    public ICollection<Bootcamp> Bootcamps { get; set; }
+}
+
+public class Employee : User
+{
+    public string Position { get; set; }
+}
+
+public class Bootcamp
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public int InstructorId { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public BootcampState BootcampState { get; set; }
+
+    public Instructor Instructor { get; set; }
+    public ICollection<Application> Applications { get; set; }
+}
+
+public class Application
+{
+    public int Id { get; set; }
+    public int ApplicantId { get; set; }
+    public int BootcampId { get; set; }
+    public ApplicationState ApplicationState { get; set; }
+
+    public Applicant Applicant { get; set; }
+    public Bootcamp Bootcamp { get; set; }
+}
+
+public class Blacklist
+{
+    public int Id { get; set; }
+    public string Reason { get; set; }
+    public DateTime Date { get; set; }
+    public int ApplicantId { get; set; }
+
+    public Applicant Applicant { get; set; }
+}
+
+
+
+
+1. AppDbContext.cs
+
+
+using Microsoft.EntityFrameworkCore;
+using Entities;
+
+public class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+    public DbSet<User> Users { get; set; }
+    public DbSet<Applicant> Applicants { get; set; }
+    public DbSet<Instructor> Instructors { get; set; }
+    public DbSet<Employee> Employees { get; set; }
+    public DbSet<Bootcamp> Bootcamps { get; set; }
+    public DbSet<Application> Applications { get; set; }
+    public DbSet<Blacklist> Blacklists { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyConfiguration(new ApplicantConfiguration());
+        modelBuilder.ApplyConfiguration(new InstructorConfiguration());
+        modelBuilder.ApplyConfiguration(new EmployeeConfiguration());
+        modelBuilder.ApplyConfiguration(new BootcampConfiguration());
+        modelBuilder.ApplyConfiguration(new ApplicationConfiguration());
+        modelBuilder.ApplyConfiguration(new BlacklistConfiguration());
+        modelBuilder.ApplyConfiguration(new UserConfiguration());
+
+        base.OnModelCreating(modelBuilder);
+    }
+}
+
+2. Entity Configuration Sınıfları (Fluent API)
+
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Entities;
+
+public class ApplicantConfiguration : IEntityTypeConfiguration<Applicant>
+{
+    public void Configure(EntityTypeBuilder<Applicant> builder)
+    {
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.About).HasMaxLength(500);
+        builder.HasMany(a => a.Applications)
+               .WithOne(app => app.Applicant)
+               .HasForeignKey(app => app.ApplicantId);
+
+        builder.HasMany(a => a.Blacklists)
+               .WithOne(b => b.Applicant)
+               .HasForeignKey(b => b.ApplicantId);
+    }
+}
+
+
+
+
+
+
+
+public class InstructorConfiguration : IEntityTypeConfiguration<Instructor>
+{
+    public void Configure(EntityTypeBuilder<Instructor> builder)
+    {
+        builder.HasKey(i => i.Id);
+        builder.Property(i => i.CompanyName).HasMaxLength(200);
+        builder.HasMany(i => i.Bootcamps)
+               .WithOne(b => b.Instructor)
+               .HasForeignKey(b => b.InstructorId);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+public class BootcampConfiguration : IEntityTypeConfiguration<Bootcamp>
+{
+    public void Configure(EntityTypeBuilder<Bootcamp> builder)
+    {
+        builder.HasKey(b => b.Id);
+        builder.Property(b => b.Name).IsRequired().HasMaxLength(200);
+        builder.Property(b => b.StartDate).IsRequired();
+        builder.Property(b => b.EndDate).IsRequired();
+        builder.Property(b => b.BootcampState).IsRequired();
+
+        builder.HasMany(b => b.Applications)
+               .WithOne(a => a.Bootcamp)
+               .HasForeignKey(a => a.BootcampId);
+    }
+}
+
+
+
+
+
+
+
+
+
+public class ApplicationConfiguration : IEntityTypeConfiguration<Application>
+{
+    public void Configure(EntityTypeBuilder<Application> builder)
+    {
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.ApplicationState).IsRequired();
+        builder.HasOne(a => a.Applicant)
+               .WithMany(ap => ap.Applications)
+               .HasForeignKey(a => a.ApplicantId);
+
+        builder.HasOne(a => a.Bootcamp)
+               .WithMany(b => b.Applications)
+               .HasForeignKey(a => a.BootcampId);
+    }
+}
+
+
+
+
+
+
+
+
+
+public class BlacklistConfiguration : IEntityTypeConfiguration<Blacklist>
+{
+    public void Configure(EntityTypeBuilder<Blacklist> builder)
+    {
+        builder.HasKey(b => b.Id);
+        builder.Property(b => b.Reason).IsRequired().HasMaxLength(500);
+        builder.Property(b => b.Date).IsRequired();
+        builder.HasOne(b => b.Applicant)
+               .WithMany(a => a.Blacklists)
+               .HasForeignKey(b => b.ApplicantId);
+    }
+}
+
+
+
+
+
+
+
+1. Generic Repository Arayüzü
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+public interface IRepository<T> where T : class
+{
+    Task<T> GetByIdAsync(int id);
+    Task<IList<T>> GetAllAsync();
+    Task<T> AddAsync(T entity);
+    Task UpdateAsync(T entity);
+    Task DeleteAsync(T entity);
+}
+
+
+2. Entity Framework ile Generic Repository
+using Microsoft.EntityFrameworkCore;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+public class EfRepository<T> : IRepository<T> where T : class
+{
+    protected readonly AppDbContext _context;
+    protected readonly DbSet<T> _dbSet;
+
+    public EfRepository(AppDbContext context)
+    {
+        _context = context;
+        _dbSet = _context.Set<T>();
+    }
+
+    public async Task<T> GetByIdAsync(int id)
+    {
+        return await _dbSet.FindAsync(id);
+    }
+
+    public async Task<IList<T>> GetAllAsync()
+    {
+        return await _dbSet.ToListAsync();
+    }
+
+    public async Task<T> AddAsync(T entity)
+    {
+        await _dbSet.AddAsync(entity);
+        await _context.SaveChangesAsync();
+        return entity;
+    }
+
+    public async Task UpdateAsync(T entity)
+    {
+        _dbSet.Update(entity);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteAsync(T entity)
+    {
+        _dbSet.Remove(entity);
+        await _context.SaveChangesAsync();
+    }
+}
+
+
+1. DTO (Request ve Response) Sınıfları
+
+public class CreateApplicantRequest
+{
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public DateTime DateOfBirth { get; set; }
+    public string NationalityIdentity { get; set; }
+    public string Email { get; set; }
+    public string Password { get; set; } // Düz metin olarak alınacak, Hashing Business katmanında yapılacak
+    public string About { get; set; }
+}
+
+
+2. Business Rules
+
+public class ApplicantBusinessRules
+{
+    private readonly IApplicantRepository _applicantRepository;
+
+    public ApplicantBusinessRules(IApplicantRepository applicantRepository)
+    {
+        _applicantRepository = applicantRepository;
+    }
+
+    public async Task CheckIfIdentityIsUnique(string identity)
+    {
+        bool exists = await _applicantRepository.ExistsByIdentityAsync(identity);
+        if (exists)
+            throw new Exception("Bu TC kimlik numarası zaten kayıtlıdır.");
+    }
+    
+    public void CheckIfReasonIsNotEmpty(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new Exception("Kara liste sebebi boş olamaz.");
+    }
+
+  
+}
+
+3. Service ve Manager Yapısı
+
+using System.Threading.Tasks;
+using Business.DTOs.Requests;
+using Business.DTOs.Responses;
+
+public interface IApplicantService
+{
+    Task<ApplicantResponse> RegisterAsync(CreateApplicantRequest request);
+    Task<ApplicantResponse> GetByIdAsync(int id);
+    // Diğer CRUD operasyonları...
+}
+
+
+using AutoMapper;
+using System.Threading.Tasks;
+
+public class ApplicantManager : IApplicantService
+{
+    private readonly IApplicantRepository _applicantRepository;
+    private readonly ApplicantBusinessRules _businessRules;
+    private readonly IMapper _mapper;
+
+    public ApplicantManager(IApplicantRepository applicantRepository, ApplicantBusinessRules businessRules, IMapper mapper)
+    {
+        _applicantRepository = applicantRepository;
+        _businessRules = businessRules;
+        _mapper = mapper;
+    }
+
+    public async Task<ApplicantResponse> RegisterAsync(CreateApplicantRequest request)
+    {
+        await _businessRules.CheckIfIdentityIsUnique(request.NationalityIdentity);
+
+        var applicant = _mapper.Map<Applicant>(request);
+
+        // Şifre Hash + Salt işlemi yapılacak (Core'daki Security servisiyle)
+        // Örneğin:
+        // CreatePasswordHash(request.Password, out byte[] passwordHash, out byte[] passwordSalt);
+        // applicant.PasswordHash = passwordHash;
+        // applicant.PasswordSalt = passwordSalt;
+
+        var addedApplicant = await _applicantRepository.AddAsync(applicant);
+
+        return _mapper.Map<ApplicantResponse>(addedApplicant);
+    }
+
+    public async Task<ApplicantResponse> GetByIdAsync(int id)
+    {
+        var applicant = await _applicantRepository.GetByIdAsync(id);
+        return _mapper.Map<ApplicantResponse>(applicant);
+    }
+
+    // Diğer CRUD işlemleri...
+}
+
+
+4. AutoMapper Profil
+
+using AutoMapper;
+
+public class ApplicantProfile : Profile
+{
+    public ApplicantProfile()
+    {
+        CreateMap<CreateApplicantRequest, Applicant>();
+        CreateMap<Applicant, ApplicantResponse>()
+            .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => $"{src.FirstName} {src.LastName}"));
+    }
+}
+
